@@ -105,8 +105,12 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <ImportLibrary>msmpi.lib;%(AdditionalDependencies)</ImportLibrary>
-      <KeyContainer>$(SolutionDir)packages\MSMPISDK.8.0.12438\Lib\x64;%(AdditionalLibraryDirectories)</KeyContainer>
+      <ImportLibrary>
+      </ImportLibrary>
+      <KeyContainer>
+      </KeyContainer>
+      <AdditionalLibraryDirectories>$(SolutionDir)packages\MSMPISDK.8.0.12438\Lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>msmpi.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">

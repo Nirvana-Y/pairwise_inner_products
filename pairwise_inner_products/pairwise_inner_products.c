@@ -8,18 +8,21 @@
 
 // declear the functions
 void allocate_memory(int w, int l, float **mx_flat, float ***mx);
+void allocate_memory_result(int w, int l, float **result_flat, float ***result);
 void initialize_mx(int w, int l, float ***mx);
 void print_mx(int w, int l, float ***mx);
+void sequential_computation(int w, int l, float ***mx);
+
 
 
 
 int main(int argc, char **argv) {
 	float *init_mx_flat; // one dimension version of the initial matrix
 	float **init_mx; // two dimension version of the initial matrix
-	float *init_max_flat_copy; // the copy of the one dimension version of the initial matrix
+	float *init_mx_flat_copy; // the copy of the one dimension version of the initial matrix
 	float **init_mx_copy;	// the copy of the two dimension version of the initial matrix
-	float *result_unsorted_flat; // one dimension version of the unsorted result
-	float **result_unsorted; // two dimension version of the unsorted result
+	float *unsorted_result_mx_flat; // one dimension version of the unsorted result
+	float **unsorted_result_mx; // two dimension version of the unsorted result
 	float *result_flat; // one dimension version of the sorted result
 	float **result; // two dimension version of the sorted result
 
@@ -70,17 +73,14 @@ int main(int argc, char **argv) {
 
 	if (myid == 0) {
 		allocate_memory(n, m, &init_mx_flat, &init_mx);
-		allocate_memory(n, m, &init_max_flat_copy, &init_mx_copy);
-
 		initialize_mx(n, m, &init_mx);
 
 		printf("The initial grid: \n");
 		print_mx(n, m, &init_mx);
-
-		
+	
 		// if there is only one process, the sequential computation is performed
 		if (numprocs == 1) {
-
+			sequential_computation(n, m, &init_mx);
 		}
 	}
 
@@ -89,7 +89,7 @@ EXIT:
 	return 0;
 }
 
-// memory allocation for grid
+// memory allocation for matrix
 void allocate_memory(int w, int l, float **mx_flat, float ***mx) {
 	int count = w * l;
 	*mx_flat = (float *)malloc(sizeof(float) * count);
@@ -101,7 +101,29 @@ void allocate_memory(int w, int l, float **mx_flat, float ***mx) {
 	}
 }
 
-// initialize the matrix
+// memory allocation for result
+void allocate_memory_result(int w, int l, float **result_flat, float ***result) {
+	int count = w * (w - 1) / 2;
+	int i, j;
+	*result_flat = (float *)malloc(sizeof(float) * count);
+	*result = (float **)malloc(sizeof(float *) * (w - 1));
+	
+	int *index = (int *)malloc(sizeof(int) * (w - 1));
+	index[0] = 0;
+
+	for (i = 1; i < (w - 1); i++) {
+		index[i] = 0;
+		for (j = (w - 1); j > (w - 1 -i); j--) {
+				index[i] = index[i] + j;
+		}
+	}
+
+	for (i = 0; i < (w - 1); i++) {
+		(*result)[i] = &((*result_flat)[index[i]]);
+	}
+}
+
+// initialize the matrix with the random float number between 0 and UPPER_BOUND round to 2 decimal places
 void initialize_mx(int w, int l, float ***mx) {
 	time_t s;
 	srand((unsigned)time(&s));
@@ -109,7 +131,8 @@ void initialize_mx(int w, int l, float ***mx) {
 
 	for (i = 0; i < w; i++) {
 		for (j = 0; j < l; j++) {
-			(*mx)[i][j] = ((float)rand() / (float)(RAND_MAX)) * UPPER_BOUND;
+			// (*mx)[i][j] = ((float)rand() / (float)(RAND_MAX)) * UPPER_BOUND;
+			(*mx)[i][j] = rand() % 10;
 			(*mx)[i][j] = (int)(100.0 * (*mx)[i][j] + 0.5) / 100.0;
 		}
 	}
@@ -126,4 +149,32 @@ void print_mx(int w, int l, float ***mx) {
 		printf("\n");
 	}
 	printf("\n");
+}
+
+// sequential program for pairwise inner products
+void sequential_computation(int w, int l, float ***mx) {
+	float inner_product;
+	float *result_flat;
+	float **result;
+	int i, j, k;
+
+	allocate_memory_result(w, l, &result_flat, &result);
+
+	for (i = 0; i < (w - 1); i++) {
+		for (j = (i + 1); j < w; j++) {
+			inner_product = 0;
+			for (k = 0; k < l; k++) {
+				inner_product = inner_product + (*mx)[i][k] * (*mx)[j][k];
+			}
+			result[i][j - i - 1] = inner_product;
+			//printf("%.2f \n", inner_product);
+		}
+	}
+
+	for (i = 0; i < (w - 1); i++) {
+		for (j = 0; j < (w - i - 1); j++) {
+			printf("%.2f ", result[i][j]);
+		}
+		printf("\n");
+	}
 }

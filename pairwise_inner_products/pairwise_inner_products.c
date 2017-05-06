@@ -21,23 +21,28 @@ int main(int argc, char **argv) {
 	float **init_mx; // two dimension version of the initial matrix
 	float *init_mx_flat_copy; // the copy of the one dimension version of the initial matrix
 	float **init_mx_copy;	// the copy of the two dimension version of the initial matrix
-	float *unsorted_result_mx_flat; // one dimension version of the unsorted result
-	float **unsorted_result_mx; // two dimension version of the unsorted result
+	float *unsorted_result_flat; // one dimension version of the unsorted result
+	float **unsorted_result; // two dimension version of the unsorted result
 	float *result_flat; // one dimension version of the sorted result
 	float **result; // two dimension version of the sorted result
 
-	// one dimension version of the task matrix (one pair, a and b)
-	float *mx_flat_a;	
-	float *mx_flat_b;
-	// two dimension version of the task matrix (one pair, a and b)
+	// one dimension version of the task matrixs (one pair, a and b)
+	float *mx_a_flat;	
+	float *mx_b_flat;
+	// two dimension version of the task matrixs (one pair, a and b)
 	float **mx_a;	
 	float **mx_b;
-
+	
+	float inner_product;
+	int row; // the number of row distributed to each process
 	int n, m; // the size of the matrix, which is given by users 
 
 	int myid;
 	int numprocs;
 	MPI_Status status;
+	MPI_Request request;
+
+	int i, j, k, u;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
@@ -71,18 +76,86 @@ int main(int argc, char **argv) {
 		goto EXIT;
 	}
 
+	row = n / numprocs;
+
+	// allocate memory for the task matrixs for every processes
+	allocate_memory(row, m, &mx_a_flat, &mx_a);
+	allocate_memory(row, m, &mx_b_flat, &mx_b);
+
 	if (myid == 0) {
 		allocate_memory(n, m, &init_mx_flat, &init_mx);
-		initialize_mx(n, m, &init_mx);
+		allocate_memory_result(n, m, &result_flat, &result);
+		allocate_memory(row * numprocs, row * ((numprocs - 1) / 2 + 1) - 1, &unsorted_result_flat, &unsorted_result);
 
+		initialize_mx(n, m, &init_mx);
 		printf("The initial grid: \n");
 		print_mx(n, m, &init_mx);
 	
 		// if there is only one process, the sequential computation is performed
 		if (numprocs == 1) {
 			sequential_computation(n, m, &init_mx);
+			goto EXIT;
+		}
+
+		// distribute the tasks to all the processes, process 0 and other processes
+		memcpy(mx_a_flat, init_mx_flat, sizeof(float) * row * m);
+
+		for (i = 1; i < numprocs; i++) {
+			MPI_Send(&init_mx_flat[row * m * i], row * m, MPI_FLOAT, i, 1, MPI_COMM_WORLD);
+		}
+
+	}
+	else {
+		allocate_memory(row, row * ((numprocs - 1) / 2 + 1) - 1, &unsorted_result_flat, &unsorted_result);
+
+		// receive the tasks from process 0
+		MPI_Recv(mx_a_flat, row * m, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, &status);
+	}
+
+	for (i = 0; i < (row - 1); i++) {
+		for (j = (i + 1); j < row; j++) {
+			inner_product = 0;
+			for (k = 0; k < m; k++) {
+				inner_product = inner_product + mx_a[i][k] * mx_a[j][k];
+			}
+			unsorted_result[i][j - i - 1] = inner_product;
 		}
 	}
+
+	MPI_Isend(mx_a_flat, row * m, MPI_FLOAT, (myid + numprocs - 1) % numprocs, 1, MPI_COMM_WORLD, &request);
+	for (u = 0; u < (numprocs - 1) / 2; u++) {
+		MPI_Recv(mx_b_flat, row * m, MPI_FLOAT, (myid + 1) % numprocs, 1, MPI_COMM_WORLD, &status);
+		// todo: calculate the task pair
+		for (i = 0; i < row; i++) {
+			for (j = 0; j < row; j++) {
+				inner_product = 0;
+				for (k = 0; k < m; k++) {
+					inner_product = inner_product + mx_a[i][k] * mx_b[j][k];
+				}
+				unsorted_result[i][(row - 1 - i) + j + u * row] = inner_product;
+			}
+		}
+		if (u < (numprocs - 1) / 2 - 1) {
+			MPI_Isend(mx_b_flat, row * m, MPI_FLOAT, (myid + numprocs - 1) % numprocs, 1, MPI_COMM_WORLD, &request);
+		}
+	}
+
+	if (myid == 0) {
+		for (i = 1; i < numprocs; i++) {
+			MPI_Recv(&unsorted_result_flat[row * (row * ((numprocs - 1) / 2 + 1) - 1) * i], row * (row * ((numprocs - 1) / 2 + 1) - 1), MPI_FLOAT, i, 1, MPI_COMM_WORLD, &status);
+		}
+		/*for (i = 0; i < row * numprocs; i++) {
+			for (j = 0; j < row * ((numprocs - 1) / 2 + 1) - 1; j++) {
+				printf("%.2f ", unsorted_result[i][j]);
+			}
+			printf("\n");
+		}
+		printf("\n");*/
+	}
+	else {
+		MPI_Send(unsorted_result_flat, row * (row * ((numprocs - 1) / 2 + 1) - 1), MPI_FLOAT, 0, 1, MPI_COMM_WORLD, &status);
+	}
+
 
 EXIT:
 	MPI_Finalize();
@@ -167,10 +240,10 @@ void sequential_computation(int w, int l, float ***mx) {
 				inner_product = inner_product + (*mx)[i][k] * (*mx)[j][k];
 			}
 			result[i][j - i - 1] = inner_product;
-			//printf("%.2f \n", inner_product);
 		}
 	}
 
+	printf("The sequential computation result: \n");
 	for (i = 0; i < (w - 1); i++) {
 		for (j = 0; j < (w - i - 1); j++) {
 			printf("%.2f ", result[i][j]);

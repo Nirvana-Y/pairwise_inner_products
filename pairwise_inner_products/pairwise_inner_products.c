@@ -11,9 +11,9 @@ void allocate_memory(int w, int l, float **mx_flat, float ***mx);
 void allocate_memory_result(int w, int l, float **result_flat, float ***result);
 void initialize_mx(int w, int l, float ***mx);
 void print_mx(int w, int l, float ***mx);
-void sequential_computation(int w, int l, float ***mx);
+float** sequential_computation(int w, int l, float ***mx);
 void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***result);
-
+void self_check(int n, int ***result, int ***result_copy);
 
 
 int main(int argc, char **argv) {
@@ -25,6 +25,7 @@ int main(int argc, char **argv) {
 	float **unsorted_result; // two dimension version of the unsorted result
 	float *result_flat; // one dimension version of the sorted result
 	float **result; // two dimension version of the sorted result
+	
 
 	// one dimension version of the task matrixs (one pair, a and b)
 	float *mx_a_flat;	
@@ -130,6 +131,7 @@ int main(int argc, char **argv) {
 				inner_product = 0;
 				for (k = 0; k < m; k++) {
 					inner_product = inner_product + mx_a[i][k] * mx_b[j][k];
+					inner_product = (int)(100.0 * inner_product + 0.5) / 100.0;
 				}
 				unsorted_result[i][(row - 1 - i) + j + u * row] = inner_product;
 			}
@@ -153,6 +155,13 @@ int main(int argc, char **argv) {
 			}
 			printf("\n");
 		}
+		printf("\n");
+
+		// perform the sequential computation		
+		float **result_copy = sequential_computation(n, m, &init_mx);
+
+		// perform the self-checking routine
+		self_check(n, &result, &result_copy);
 	}
 	else {
 		MPI_Send(unsorted_result_flat, row * (row * ((numprocs - 1) / 2 + 1) - 1), MPI_FLOAT, 0, 1, MPI_COMM_WORLD, &status);
@@ -206,8 +215,8 @@ void initialize_mx(int w, int l, float ***mx) {
 
 	for (i = 0; i < w; i++) {
 		for (j = 0; j < l; j++) {
-			// (*mx)[i][j] = ((float)rand() / (float)(RAND_MAX)) * UPPER_BOUND;
-			(*mx)[i][j] = rand() % 10;
+			(*mx)[i][j] = ((float)rand() / (float)(RAND_MAX)) * UPPER_BOUND;
+			// (*mx)[i][j] = rand() % 10;
 			(*mx)[i][j] = (int)(100.0 * (*mx)[i][j] + 0.5) / 100.0;
 		}
 	}
@@ -227,7 +236,7 @@ void print_mx(int w, int l, float ***mx) {
 }
 
 // sequential program for pairwise inner products
-void sequential_computation(int w, int l, float ***mx) {
+float** sequential_computation(int w, int l, float ***mx) {
 	float inner_product;
 	float *result_flat;
 	float **result;
@@ -252,6 +261,9 @@ void sequential_computation(int w, int l, float ***mx) {
 		}
 		printf("\n");
 	}
+	printf("\n");
+
+	return result;
 }
 
 // sort the unsorted result
@@ -295,4 +307,29 @@ void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***
 			u++;
 		}
 	}
+}
+
+// self-checking routine
+void self_check(int n, int ***result, int ***result_copy) {
+	int flag = 0;
+	int i, j;
+	
+	for (i = 0; i < (n - 1); i++) {
+		for (j = 0; j < (n - i - 1); j++) {
+			if ((*result)[i][j] != (*result_copy)[i][j]) {
+				flag = 0;
+			}
+		}
+	}
+
+
+	if (flag == 0) {
+		printf("The results of parallel program and sequential program are identical.\n");
+		printf("The program is correct.\n");
+	}
+	else {
+		printf("The results of parallel program and sequential program are not identical.\n");
+		printf("The program is wrong.\n");
+	}
+	printf("\n");
 }

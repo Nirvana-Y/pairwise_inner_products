@@ -119,6 +119,7 @@ int main(int argc, char **argv) {
 			for (k = 0; k < m; k++) {
 				inner_product = inner_product + mx_a[i][k] * mx_a[j][k];
 			}
+			inner_product = (int)(100.0 * inner_product + 0.5) / 100.0;
 			unsorted_result[i][j - i - 1] = inner_product;
 		}
 	}
@@ -131,8 +132,8 @@ int main(int argc, char **argv) {
 				inner_product = 0;
 				for (k = 0; k < m; k++) {
 					inner_product = inner_product + mx_a[i][k] * mx_b[j][k];
-					inner_product = (int)(100.0 * inner_product + 0.5) / 100.0;
 				}
+				inner_product = (int)(100.0 * inner_product + 0.5) / 100.0;
 				unsorted_result[i][(row - 1 - i) + j + u * row] = inner_product;
 			}
 		}
@@ -250,6 +251,7 @@ float** sequential_computation(int w, int l, float ***mx) {
 			for (k = 0; k < l; k++) {
 				inner_product = inner_product + (*mx)[i][k] * (*mx)[j][k];
 			}
+			inner_product = (int)(100.0 * inner_product + 0.5) / 100.0;
 			result[i][j - i - 1] = inner_product;
 		}
 	}
@@ -317,7 +319,7 @@ void self_check(int n, int ***result, int ***result_copy) {
 	for (i = 0; i < (n - 1); i++) {
 		for (j = 0; j < (n - i - 1); j++) {
 			if ((*result)[i][j] != (*result_copy)[i][j]) {
-				flag = 0;
+				flag = 1;
 			}
 		}
 	}

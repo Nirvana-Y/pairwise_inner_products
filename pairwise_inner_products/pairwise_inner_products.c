@@ -2,6 +2,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 // upper bound for random number
 #define UPPER_BOUND 10
@@ -13,7 +14,7 @@ void initialize_mx(int w, int l, float ***mx);
 void print_mx(int w, int l, float ***mx);
 float** sequential_computation(int w, int l, float ***mx);
 void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***result);
-void self_check(int n, int ***result, int ***result_copy);
+void self_check(int n, float ***result, float ***result_copy);
 
 
 int main(int argc, char **argv) {
@@ -165,7 +166,7 @@ int main(int argc, char **argv) {
 		self_check(n, &result, &result_copy);
 	}
 	else {
-		MPI_Send(unsorted_result_flat, row * (row * ((numprocs - 1) / 2 + 1) - 1), MPI_FLOAT, 0, 1, MPI_COMM_WORLD, &status);
+		MPI_Send(unsorted_result_flat, row * (row * ((numprocs - 1) / 2 + 1) - 1), MPI_FLOAT, 0, 1, MPI_COMM_WORLD);
 	}
 
 
@@ -312,7 +313,7 @@ void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***
 }
 
 // self-checking routine
-void self_check(int n, int ***result, int ***result_copy) {
+void self_check(int n, float ***result, float ***result_copy) {
 	int flag = 0;
 	int i, j;
 	

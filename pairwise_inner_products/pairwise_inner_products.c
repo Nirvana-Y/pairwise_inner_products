@@ -148,6 +148,14 @@ int main(int argc, char **argv) {
 			MPI_Recv(&unsorted_result_flat[row * (row * ((numprocs - 1) / 2 + 1) - 1) * i], row * (row * ((numprocs - 1) / 2 + 1) - 1), MPI_FLOAT, i, 1, MPI_COMM_WORLD, &status);
 		}
 
+		/*for (i = 0; i < row * numprocs; i++) {
+			for (j = 0; j < row * ((numprocs - 1) / 2 + 1) - 1; j++) {
+				printf("%.2f ", unsorted_result[i][j]);
+			}
+			printf("\n");
+		}
+		printf("\n");*/
+
 		sort_result(n, m, numprocs, &unsorted_result, &result);
 
 		printf("The parallel computation result: \n");
@@ -217,8 +225,8 @@ void initialize_mx(int w, int l, float ***mx) {
 
 	for (i = 0; i < w; i++) {
 		for (j = 0; j < l; j++) {
-			(*mx)[i][j] = ((float)rand() / (float)(RAND_MAX)) * UPPER_BOUND;
-			// (*mx)[i][j] = rand() % 10;
+			// (*mx)[i][j] = ((float)rand() / (float)(RAND_MAX)) * UPPER_BOUND;
+			(*mx)[i][j] = rand() % 10;
 			(*mx)[i][j] = (int)(100.0 * (*mx)[i][j] + 0.5) / 100.0;
 		}
 	}
@@ -273,10 +281,10 @@ float** sequential_computation(int w, int l, float ***mx) {
 void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***result) {
 	int row = w / numprocs;
 	float *mediate_mx_flat;
-	float **mediatae_mx;
+	float **mediate_mx;
 	int i, j, k, u;
 
-	allocate_memory(row * (numprocs - 1) / 2, row * ((numprocs - 1) / 2 + 1) - 2, &mediate_mx_flat, &mediatae_mx);
+	allocate_memory(row * (numprocs - 1) / 2, row * ((numprocs - 1) / 2 + 1) - 2, &mediate_mx_flat, &mediate_mx);
 
 	for (i = 0; i < row * (numprocs + 1) / 2; i++) {
 		for (j = 0; j < (row * ((numprocs - 1) / 2 + 1) - 1); j++) {
@@ -284,32 +292,50 @@ void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***
 		}
 	}
 
+	k = 0;
 	for (i = row * (numprocs + 1) / 2; i < w - 1; i++) {
-		k = 0;
 		for (j = 0; j < ((numprocs - 1) / 2 * row - 1 - k); j++) {
 			(*result)[i][j] = (*unsorted_result)[i][j];
 		}
 		k++;
 	}
 
-	k = 0;
+	/*k = 0;
 	for (i = row * (numprocs + 1) / 2; i < w; i++) {
 		u = 0;
 		for (j = ((numprocs - 1) / 2 * row - 1 - k); j < (row * ((numprocs - 1) / 2 + 1) - 1); j++) {
-			mediatae_mx[k][u] = (*unsorted_result)[i][j];
+			mediate_mx[k][u] = (*unsorted_result)[i][j];
 			u++;
 		}
 		k++;
+	}*/
+
+	for (i = 0; i < row * (numprocs - 1) / 2; i++) {
+		for (j = 0; j <row * ((numprocs - 1) / 2 + 1) - 2; j++) {
+			if (j >= row + i) {
+				break;
+			}
+			mediate_mx[i][j] = (*unsorted_result)[i + row * (numprocs + 1) / 2][j + ((numprocs - 1) / 2 * row - 1 - i)];
+		}
 	}
+
+	//for (i = 0; i < row * (numprocs - 1) / 2; i++) {
+	//	for (j = 0; j < row * ((numprocs - 1) / 2 + 1) - 2; j++) {
+	//		printf("%.2f ", mediate_mx[i][j]);
+	//	}
+	//	printf("\n");
+	//}
+	//printf("\n");
 
 	for (i = 0; i < row * (numprocs - 1) / 2; i++) {
 		k = i % row;
 		u = i / row * row;
 		for (j = (row * ((numprocs - 1) / 2 + 1) - 1) - k; j < w - i - 1; j++) {
-			(*result)[i][j] = mediatae_mx[u][i];
+			(*result)[i][j] = mediate_mx[u][i];
 			u++;
 		}
 	}
+
 }
 
 // self-checking routine

@@ -10,6 +10,7 @@
 // declear the functions
 void allocate_memory(int w, int l, float **mx_flat, float ***mx);
 void allocate_memory_result(int w, int l, float **result_flat, float ***result);
+void allocate_memory_unsorted_result(int w, int l, int num, float **mx_flat, float ***mx);
 void initialize_mx(int w, int l, float ***mx);
 void print_mx(int w, int l, float ***mx);
 float** sequential_computation(int w, int l, float ***mx);
@@ -87,7 +88,7 @@ int main(int argc, char **argv) {
 	if (myid == 0) {
 		allocate_memory(n, m, &init_mx_flat, &init_mx);
 		allocate_memory_result(n, m, &result_flat, &result);
-		allocate_memory(row * numprocs, row * ((numprocs - 1) / 2 + 1) - 1, &unsorted_result_flat, &unsorted_result);
+		allocate_memory_unsorted_result(row, row * ((numprocs - 1) / 2 + 1) - 1, numprocs, &unsorted_result_flat, &unsorted_result);
 
 		initialize_mx(n, m, &init_mx);
 		printf("The initial grid: \n");
@@ -108,7 +109,7 @@ int main(int argc, char **argv) {
 
 	}
 	else {
-		allocate_memory(row, row * ((numprocs - 1) / 2 + 1) - 1, &unsorted_result_flat, &unsorted_result);
+		allocate_memory_unsorted_result(row, row * ((numprocs - 1) / 2 + 1) - 1, 1, &unsorted_result_flat, &unsorted_result);
 
 		// receive the tasks from process 0
 		MPI_Recv(mx_a_flat, row * m, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, &status);
@@ -128,6 +129,9 @@ int main(int argc, char **argv) {
 	MPI_Isend(mx_a_flat, row * m, MPI_FLOAT, (myid + numprocs - 1) % numprocs, 1, MPI_COMM_WORLD, &request);
 	for (u = 0; u < (numprocs - 1) / 2; u++) {
 		MPI_Recv(mx_b_flat, row * m, MPI_FLOAT, (myid + 1) % numprocs, 1, MPI_COMM_WORLD, &status);
+		if (u < (numprocs - 1) / 2 - 1) {
+			MPI_Isend(mx_b_flat, row * m, MPI_FLOAT, (myid + numprocs - 1) % numprocs, 1, MPI_COMM_WORLD, &request);
+		}
 		for (i = 0; i < row; i++) {
 			for (j = 0; j < row; j++) {
 				inner_product = 0;
@@ -138,23 +142,16 @@ int main(int argc, char **argv) {
 				unsorted_result[i][(row - 1 - i) + j + u * row] = inner_product;
 			}
 		}
-		if (u < (numprocs - 1) / 2 - 1) {
-			MPI_Isend(mx_b_flat, row * m, MPI_FLOAT, (myid + numprocs - 1) % numprocs, 1, MPI_COMM_WORLD, &request);
-		}
 	}
+
+	int first = row * ((numprocs - 1) / 2 + 1) - 1;
+	int term = row;
+	int count = (2 * first - term + 1) * term / 2;
 
 	if (myid == 0) {
 		for (i = 1; i < numprocs; i++) {
-			MPI_Recv(&unsorted_result_flat[row * (row * ((numprocs - 1) / 2 + 1) - 1) * i], row * (row * ((numprocs - 1) / 2 + 1) - 1), MPI_FLOAT, i, 1, MPI_COMM_WORLD, &status);
+			MPI_Recv(&unsorted_result_flat[count * i], count, MPI_FLOAT, i, 1, MPI_COMM_WORLD, &status);
 		}
-
-		/*for (i = 0; i < row * numprocs; i++) {
-			for (j = 0; j < row * ((numprocs - 1) / 2 + 1) - 1; j++) {
-				printf("%.2f ", unsorted_result[i][j]);
-			}
-			printf("\n");
-		}
-		printf("\n");*/
 
 		sort_result(n, m, numprocs, &unsorted_result, &result);
 
@@ -174,7 +171,7 @@ int main(int argc, char **argv) {
 		self_check(n, &result, &result_copy);
 	}
 	else {
-		MPI_Send(unsorted_result_flat, row * (row * ((numprocs - 1) / 2 + 1) - 1), MPI_FLOAT, 0, 1, MPI_COMM_WORLD);
+		MPI_Send(unsorted_result_flat, count, MPI_FLOAT, 0, 1, MPI_COMM_WORLD);
 	}
 
 
@@ -198,9 +195,9 @@ void allocate_memory(int w, int l, float **mx_flat, float ***mx) {
 // memory allocation for result
 void allocate_memory_result(int w, int l, float **result_flat, float ***result) {
 	int count = w * (w - 1) / 2;
-	int i, j;
 	*result_flat = (float *)malloc(sizeof(float) * count);
 	*result = (float **)malloc(sizeof(float *) * (w - 1));
+	int i, j;
 	
 	int *index = (int *)malloc(sizeof(int) * (w - 1));
 	index[0] = 0;
@@ -214,6 +211,29 @@ void allocate_memory_result(int w, int l, float **result_flat, float ***result) 
 
 	for (i = 0; i < (w - 1); i++) {
 		(*result)[i] = &((*result_flat)[index[i]]);
+	}
+}
+
+// memory allocation for unsorted result
+void allocate_memory_unsorted_result(int w, int l, int num, float **mx_flat, float ***mx) {
+	int count = (2 * l - w + 1) * w / 2;
+	int total_count = count * num;
+	*mx_flat = (float *)malloc(sizeof(float) * total_count);
+	*mx = (float **)malloc(sizeof(float *) * w * num);
+	int i, j, k;
+
+	int *index = (int *)malloc(sizeof(int) * w * num);
+
+	index[0] = 0;
+	for (i = 1; i < w * num; i++) {
+		index[i] = i / w * count;
+		for (j = l; j > (l - i % w); j--) {
+				index[i] = index[i] + j;
+		}
+	}
+
+	for (i = 0; i < w * num; i++) {
+		(*mx)[i] = &((*mx_flat)[index[i]]);
 	}
 }
 
@@ -300,16 +320,6 @@ void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***
 		k++;
 	}
 
-	/*k = 0;
-	for (i = row * (numprocs + 1) / 2; i < w; i++) {
-		u = 0;
-		for (j = ((numprocs - 1) / 2 * row - 1 - k); j < (row * ((numprocs - 1) / 2 + 1) - 1); j++) {
-			mediate_mx[k][u] = (*unsorted_result)[i][j];
-			u++;
-		}
-		k++;
-	}*/
-
 	for (i = 0; i < row * (numprocs - 1) / 2; i++) {
 		for (j = 0; j <row * ((numprocs - 1) / 2 + 1) - 2; j++) {
 			if (j >= row + i) {
@@ -319,13 +329,13 @@ void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***
 		}
 	}
 
-	//for (i = 0; i < row * (numprocs - 1) / 2; i++) {
-	//	for (j = 0; j < row * ((numprocs - 1) / 2 + 1) - 2; j++) {
-	//		printf("%.2f ", mediate_mx[i][j]);
-	//	}
-	//	printf("\n");
-	//}
-	//printf("\n");
+	/*for (i = 0; i < row * (numprocs - 1) / 2; i++) {
+		for (j = 0; j < row * ((numprocs - 1) / 2 + 1) - 2; j++) {
+			printf("%.2f ", mediate_mx[i][j]);
+		}
+		printf("\n");
+	}
+	printf("\n");*/
 
 	for (i = 0; i < row * (numprocs - 1) / 2; i++) {
 		k = i % row;
@@ -335,7 +345,6 @@ void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***
 			u++;
 		}
 	}
-
 }
 
 // self-checking routine

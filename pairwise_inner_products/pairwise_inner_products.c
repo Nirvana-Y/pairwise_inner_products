@@ -14,7 +14,7 @@ void allocate_memory_unsorted_result(int w, int l, int num, float **mx_flat, flo
 void initialize_mx(int w, int l, float ***mx);
 void print_mx(int w, int l, float ***mx);
 float** sequential_computation(int w, int l, float ***mx);
-void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***result);
+void sort_result(int w, int l, int numprocs, float ***unsorted_result_raw, float ***result);
 void self_check(int n, float ***result, float ***result_copy);
 
 
@@ -245,8 +245,8 @@ void initialize_mx(int w, int l, float ***mx) {
 
 	for (i = 0; i < w; i++) {
 		for (j = 0; j < l; j++) {
-			// (*mx)[i][j] = ((float)rand() / (float)(RAND_MAX)) * UPPER_BOUND;
-			(*mx)[i][j] = rand() % 10;
+			(*mx)[i][j] = ((float)rand() / (float)(RAND_MAX)) * UPPER_BOUND;
+			// (*mx)[i][j] = rand() % 10;
 			(*mx)[i][j] = (int)(100.0 * (*mx)[i][j] + 0.5) / 100.0;
 		}
 	}
@@ -298,24 +298,34 @@ float** sequential_computation(int w, int l, float ***mx) {
 }
 
 // sort the unsorted result
-void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***result) {
+void sort_result(int w, int l, int numprocs, float ***unsorted_result_raw, float ***result) {
 	int row = w / numprocs;
+	float *unsorted_result_flat;
+	float **unsorted_result;
 	float *mediate_mx_flat;
 	float **mediate_mx;
 	int i, j, k, u;
 
+	allocate_memory(row * numprocs, row * ((numprocs - 1) / 2 + 1) - 1, &unsorted_result_flat, &unsorted_result);
 	allocate_memory(row * (numprocs - 1) / 2, row * ((numprocs - 1) / 2 + 1) - 2, &mediate_mx_flat, &mediate_mx);
+
+	for (i = 0; i < row * numprocs; i++) {
+		k = i % row;
+		for (j = 0; j < (row * ((numprocs - 1) / 2 + 1) - 1) - k; j++) {
+			unsorted_result[i][j] = (*unsorted_result_raw)[i][j];
+		}
+	}
 
 	for (i = 0; i < row * (numprocs + 1) / 2; i++) {
 		for (j = 0; j < (row * ((numprocs - 1) / 2 + 1) - 1); j++) {
-			(*result)[i][j] = (*unsorted_result)[i][j];
+			(*result)[i][j] = unsorted_result[i][j];
 		}
 	}
 
 	k = 0;
 	for (i = row * (numprocs + 1) / 2; i < w - 1; i++) {
 		for (j = 0; j < ((numprocs - 1) / 2 * row - 1 - k); j++) {
-			(*result)[i][j] = (*unsorted_result)[i][j];
+			(*result)[i][j] = unsorted_result[i][j];
 		}
 		k++;
 	}
@@ -325,17 +335,9 @@ void sort_result(int w, int l, int numprocs, float ***unsorted_result, float ***
 			if (j >= row + i) {
 				break;
 			}
-			mediate_mx[i][j] = (*unsorted_result)[i + row * (numprocs + 1) / 2][j + ((numprocs - 1) / 2 * row - 1 - i)];
+			mediate_mx[i][j] = unsorted_result[i + row * (numprocs + 1) / 2][j + ((numprocs - 1) / 2 * row - 1 - i)];
 		}
 	}
-
-	/*for (i = 0; i < row * (numprocs - 1) / 2; i++) {
-		for (j = 0; j < row * ((numprocs - 1) / 2 + 1) - 2; j++) {
-			printf("%.2f ", mediate_mx[i][j]);
-		}
-		printf("\n");
-	}
-	printf("\n");*/
 
 	for (i = 0; i < row * (numprocs - 1) / 2; i++) {
 		k = i % row;

@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
 		allocate_memory_unsorted_result(row, row * ((numprocs - 1) / 2 + 1) - 1, numprocs, &unsorted_result_flat, &unsorted_result);
 
 		initialize_mx(n, m, &init_mx);
-		printf("The initial grid: \n");
+		printf("The initial matrix: \n");
 		print_mx(n, m, &init_mx);
 	
 		// if there is only one process, the sequential computation is performed

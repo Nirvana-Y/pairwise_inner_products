@@ -115,6 +115,7 @@ int main(int argc, char **argv) {
 		MPI_Recv(mx_a_flat, row * m, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, &status);
 	}
 
+	MPI_Isend(mx_a_flat, row * m, MPI_FLOAT, (myid + numprocs - 1) % numprocs, 1, MPI_COMM_WORLD, &request);
 	for (i = 0; i < (row - 1); i++) {
 		for (j = (i + 1); j < row; j++) {
 			inner_product = 0;
@@ -126,7 +127,6 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	MPI_Isend(mx_a_flat, row * m, MPI_FLOAT, (myid + numprocs - 1) % numprocs, 1, MPI_COMM_WORLD, &request);
 	for (u = 0; u < (numprocs - 1) / 2; u++) {
 		MPI_Recv(mx_b_flat, row * m, MPI_FLOAT, (myid + 1) % numprocs, 1, MPI_COMM_WORLD, &status);
 		if (u < (numprocs - 1) / 2 - 1) {
